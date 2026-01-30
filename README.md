@@ -1,114 +1,72 @@
-# 🔋 Server Battery Manager x Shelly Plug S Gen 3
+# 🔋 Server Battery & Thermal Manager (Shelly Gen 3)
+Ce projet permet de transformer un PC portable sous Ubuntu Server en un nœud auto-géré. Il optimise la santé de la batterie (maintien à 75%), surveille la température CPU en temps réel (crucial pour l'usage capot fermé) et pilote une prise intelligente **Shelly Plug S Gen 3**.
 
-Ce projet permet de piloter intelligemment une prise connectée **Shelly Plug S Gen 3** en fonction du niveau de batterie d'un serveur Ubuntu. Il ajuste la couleur de la LED de la prise, gère un temps de recharge automatique et notifie l'état sur **Discord** en nettoyant les anciens messages.
+## 🚀 Points forts
+- **Calcul Dynamique de Charge** : Le temps de recharge est calculé précisément selon la formule physique $T = \frac{E}{P}$ (Énergie manquante / Puissance nette disponible).
 
-## 📋 Sommaire
-1. [Fonctionnalités](#-fonctionnalités)
-2. [Structure du Projet](#-structure-du-projet)
-3. [Prérequis](#-prérequis)
-4. [Installation](#-installation)
-5. [Configuration](#-configuration)
-6. [Automatisation (Cron)](#-automatisation-cron)
+- **Mesure de Consommation Réelle** : Utilise la loi d'Ohm ($P=U×I$) via le kernel Linux pour obtenir les Watts exacts consommés par le PC, même pendant la recharge.
 
----
+- **Monitoring Thermique Précis** : Surveille le package CPU (`thermal_zone3`) avec alertes Discord.
 
-## 🚀 Fonctionnalités
+- **Auto-nettoyage Discord** : Supprime automatiquement le message précédent pour garder un canal de log propre.
 
-- **Analyse de la batterie** : Récupération du pourcentage via `upower`.
-- **Gestion Shelly Gen 3** : 
-    - Contrôle des couleurs LED via RPC (HTTP).
-    - Allumage avec minuteur de sécurité (`toggle_after`).
-- **Logique de Charge** :
-    - `> 60%` : Éteint (LED Off).
-    - `50–59%` : 15 min (LED Verte 🟢).
-    - `40–49%` : 30 min (LED Jaune 🟡).
-    - `30–39%` : 45 min (LED Orange 🟠).
-    - `< 30%`  : 60 min (LED Rouge 🔴).
-- **Notification Discord** :
-    - Envoi via Webhook.
-    - Suppression automatique du message précédent pour garder un canal propre.
-
----
+- **Sécurité Fail-Safe** : En cas d'erreur de lecture des capteurs, la prise est coupée par précaution.
 
 ## 🏗 Structure du Projet
-
-```text
+```Plaintext
 ./
 ├── battery_manager.py    # Script principal Python
-├── discord_msg_id.txt    # Stocke l'ID du dernier message (généré auto)
+├── discord_msg_id.txt    # Stocke l'ID du dernier message (auto-généré)
 └── README.md             # Documentation
 ```
 
 ## 🛠 Prérequis
-- **Système** : Ubuntu (ou toute distro Linux avec `upower`).
+- **OS** : Ubuntu Server (avec `upower` installé).
 
-- **Matériel** : Shelly Plug S Gen 3 (avec IP statique).
+- **Matériel** : Shelly Plug S Gen 3 (IP statique recommandée).
 
-- **Python** : Version 3.x installée.
-
-- **Dépendances :**
+- **Python** : 3.x + bibliothèque `requests`.
 
 ```Bash
-
 pip install requests
 ```
 
-## 📥 Installation
-- **Cloner ou créer le dossier** :
-
-```Bash
-
-mkdir -p ~/scripts/battery-manager
-cd ~/scripts/battery-manager
-```
-
-- **Créer le script** : Copiez le code Python fourni dans un fichier nommé `battery_manager.py`.
-
-- **Rendre le script exécutable** :
-
-```Bash
-
-chmod +x battery_manager.py
-```
-
-## ⚙️ Configuration
-Ouvrez `battery_manager.py` et modifiez la section `CONFIGURATION` :
+## ⚙️ Configuration du Script
+Modifie les constantes au début du fichier `battery_manager.py` pour les adapter à ton matériel :
 
 ```Python
-
-SHELLY_IP = "192.168.1.50"          # IP de votre Shelly
-DISCORD_WEBHOOK_URL = "VOTRE_URL"   # URL Webhook Discord
+CHARGER_WATTAGE = 45  # Puissance de ton chargeur original
+TARGET_PERCENT = 75   # Seuil d'arrêt (recommandé pour la longévité)
+EFFICIENCY = 0.8      # Rendement du circuit (80%)
+TEMP_LIMIT = 75       # Alerte surchauffe
 ```
 
 ## 🕒 Automatisation (Cron)
-Pour respecter la vérification **toutes les 2 heures à la minute 05** (ex: 11h20 -> 13h05), configurez le cron de l'utilisateur :
+Pour assurer une gestion fluide, le script est configuré pour s'exécuter toutes les heures paires à la minute 05 (ex: 00h05, 02h05, 04h05...).
 
-- Ouvrez l'éditeur cron :
-
+1. Ouvrez l'éditeur cron :
 ```Bash
-
 crontab -e
 ```
 
-- Ajoutez la ligne suivante en bas du fichier :
-
+2. Ajoutez la ligne suivante (adaptez le chemin vers votre script) :
 ```Extrait de code
-
-5 */2 * * * /usr/bin/python3 /home/VOTRE_USER/scripts/battery-manager/battery_manager.py
+5 */2 * * * /usr/bin/python3 /home/VOTRE_USER/scripts/battery_manager.py
 ```
-*Note : Remplacez `VOTRE_USER` par votre nom d'utilisateur Linux.*
 
-## 📊 Schéma Logique
+## 📊 Logique Visuelle (Shelly LED)
+Le script ajuste la couleur de la LED circulaire de la prise Shelly selon l'état de la batterie :
 
-| Batterie | Couleur LED | Temps Charge |
-| -------- | ----------- | ------------ |
-|   60% +  |   ⚪ Off   |     0 min    |
-|  50-59%  |   🟢 Vert	|    15 min    |
-|  40-49%  |  🟡 Jaune	|    30 min    |
-|  30-39%  |  🟠 Orange	|    45 min    |
-|  < 30%   |  🔴 Rouge	|    60 min    |
+|   Niveau   |  Couleur LED  |    Statut Discord    |
+|:----------:|:-------------:|:---------------------|
+|   < 30%    |   🔴 Rouge    |     ⚠️ Critique     |
+| 31% - 50%  |	 🟠 Orange   | 	     🟠 Moyen      |
+| 51% - 74%  |    🟢 Vert    |      🟢 Optimal     |
+|    75% +	 |    ⚪ Off     |   ✅ Chargé / Repos |
 
 ## 📝 Maintenance
-**Logs** : Si vous souhaitez rediriger les erreurs vers un fichier log, modifiez le cron ainsi : ``5 */2 * * * python3 ...py >> /home/user/battery.log 2>&1``
+- **Lecture Consommation** : Le script tente de lire `energy-rate` via upower, s'il est à 0 (cas fréquent en charge), il bascule sur le calcul `voltage_now * current_now` dans `/sys/class/power_supply/BAT0/`.
 
-**ID Discord** : Le fichier `discord_msg_id.txt` est créé automatiquement au premier lancement. S'il est supprimé, le script en créera simplement un nouveau sans supprimer le dernier message Discord existant.
+- **Température** : La cible est `thermal_zone3` (x86_pkg_temp) pour refléter la chaleur réelle du cœur processeur.
+
+- **Relais** : Le temps de charge est arrondi par pas de 5 minutes pour éviter l'usure prématurée du relais de la prise Shelly.
